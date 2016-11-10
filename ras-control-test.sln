@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ras-control-test-cs-console
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ras-bt-test", "ras-bt-test\ras-bt-test.csproj", "{03C39220-F6D7-4306-9777-D8143E2A41E8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ras-control", "ras-control\ras-control.csproj", "{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -79,6 +81,18 @@ Global
 		{03C39220-F6D7-4306-9777-D8143E2A41E8}.Release|x64.Build.0 = Release|Any CPU
 		{03C39220-F6D7-4306-9777-D8143E2A41E8}.Release|x86.ActiveCfg = Release|Any CPU
 		{03C39220-F6D7-4306-9777-D8143E2A41E8}.Release|x86.Build.0 = Release|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Debug|x64.Build.0 = Debug|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Debug|x86.Build.0 = Debug|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Release|Any CPU.Build.0 = Release|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Release|x64.ActiveCfg = Release|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Release|x64.Build.0 = Release|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Release|x86.ActiveCfg = Release|Any CPU
+		{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

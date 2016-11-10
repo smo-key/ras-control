@@ -1,16 +1,12 @@
-﻿using InTheHand.Net.Sockets;
+﻿using System;
+using System.IO.Ports;
 using SharpDX.DirectInput;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ras_control_test_cs_console
 {
     class Program
     {
+        /** MAKE SURE JOYSTICK IS IN "D" MODE **/
         enum JoystickButtons
         {
             X = JoystickOffset.Buttons0,
@@ -35,17 +31,28 @@ namespace ras_control_test_cs_console
         struct PartialJoystickState
         {
             public double lx, ly, rx, ry;
+
+            public bool isZero()
+            {
+                return (lx == 0) && (ly == 0) && (rx == 0) && (ry == 0);
+            }
         }
 
         struct ParseUpdateResult
         {
             public PartialJoystickState state;
             public string update;
+            public bool isJoystick;
+            public bool isJoystickZero;
+            public JoystickButtons btn;
 
-            public ParseUpdateResult(PartialJoystickState state, string update)
+            public ParseUpdateResult(PartialJoystickState state, string update, bool isJoystick, bool isJoystickZero, JoystickButtons btn)
             {
                 this.state = state;
                 this.update = update;
+                this.isJoystick = isJoystick;
+                this.isJoystickZero = isJoystickZero;
+                this.btn = btn;
             }
         }
 
@@ -71,6 +78,8 @@ namespace ras_control_test_cs_console
         {
             JoystickButtons btn = (JoystickButtons)update.Offset;
             string data = btn.ToString();
+            bool isJoystickUpdate = false;
+            bool isJoystickZero = false;
             switch (btn)
             {
                 case JoystickButtons.X:
@@ -97,37 +106,57 @@ namespace ras_control_test_cs_console
                                 + ((update.Value == 9000) || (update.Value == 4500) || (update.Value == 13500) ? 1 : 0) + " " + (val).ToString();
                     break;
                 case JoystickButtons.LX:
-                    state.lx = deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.05);
+                    state.lx = deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.25);
                     data = "L " + calcJoystick(state.lx, state.ly);
+                    isJoystickUpdate = true;
+                    isJoystickZero = ((state.lx == 0) && (state.ly == 0));
                     break;
                 case JoystickButtons.LY:
-                    state.ly = deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.05);
+                    state.ly = deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.25);
                     data = "L " + calcJoystick(state.lx, state.ly);
+                    isJoystickUpdate = true;
+                    isJoystickZero = ((state.lx == 0) && (state.ly == 0));
                     break;
                 case JoystickButtons.RX:
-                    state.rx = deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.05);
+                    state.rx = deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.25);
                     data = "R " + calcJoystick(state.rx, state.ry);
+                    isJoystickUpdate = true;
+                    isJoystickZero = ((state.rx == 0) && (state.ry == 0));
                     break;
                 case JoystickButtons.RY:
-                    state.ry = deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.05);
+                    state.ry = deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.25);
                     data = "R " + calcJoystick(state.rx, state.ry);
+                    isJoystickUpdate = true;
+                    isJoystickZero = ((state.rx == 0) && (state.ry == 0));
                     break;
                 default:
                     data = update.ToString();
                     break;
             }
-            return new ParseUpdateResult(state, data);
+            return new ParseUpdateResult(state, data, isJoystickUpdate, isJoystickZero, btn);
         }
 
         static void Main(string[] args)
         {
             /** BLUETOOTH INIT **/
+            // Replace this COM port by the appropriate one on your computer
+            SerialPort arduino = new SerialPort("COM7");
 
-            //Check to make sure BT is running
-            new BluetoothClient();
+            //Open Arduino connection
+            while (!arduino.IsOpen)
+            {
+                Console.WriteLine("Attempting to connect to Arduino (COM 7)...");
+                try
+                {
+                    arduino.Open();
+                } catch (Exception)
+                {
+                    System.Threading.Thread.Sleep(1000);
+                }
+            }
+            Console.WriteLine("Connected to Arduino!");
 
             /** CONTROLLER INIT **/
-
             // Initialize DirectInput
             var directInput = new DirectInput();
 
@@ -168,24 +197,107 @@ namespace ras_control_test_cs_console
             partialState.ly = 0.0;
             partialState.rx = 0.0;
             partialState.ry = 0.0;
+
+            /** EVENT LOOP **/
+            const int ROLL_SIZE = 5;
+            const int MAX_TIMEOUT = 50; //ms between first and last push
+            int queueIndex = 0;
+            DateTime queueStartTime = DateTime.Now;
+            PartialJoystickState prevState = new PartialJoystickState();
             while (true)
             {
                 try
                 {
+                    //Poll joystick
                     joystick.Poll();
                     var updates = joystick.GetBufferedData();
                     //JoystickState state = joystick.GetCurrentState();
+
                     foreach (JoystickUpdate update in updates)
                     {
                         ParseUpdateResult result = parseUpdate(update, partialState);
                         partialState = result.state;
                         Console.WriteLine(result.update);
+
+                        //Add to queue if joystick update
+                        bool flush = true; //should write to Arduino?
+                        if (result.isJoystick)
+                        {
+                            if (queueIndex == 0) { queueStartTime = DateTime.Now; }
+                            queueIndex++;
+
+                            //Check whether we should flush the state
+                            TimeSpan tdiff = DateTime.Now - queueStartTime;
+                            //Clear immediately if joystick state is zero
+                            if (result.isJoystickZero)
+                            {
+                                queueIndex = 0;
+
+                                //definitely flush
+                                flush = true;
+                            }
+                            else if ((queueIndex == ROLL_SIZE) || (tdiff.TotalMilliseconds > MAX_TIMEOUT))
+                            {
+                                //For now, just get last state when flushing
+
+                                //Clear
+                                queueIndex = 0;
+                                //Flush
+                                flush = true;
+                            }
+                            else
+                            {
+                                flush = false;
+                            }
+                            prevState = result.state;
+                        }
+
+                        try
+                        {
+                            if (flush) arduino.WriteLine(result.update);
+                        }
+                        catch (Exception)
+                        {
+                            if (!arduino.IsOpen)
+                            {
+                                do
+                                {
+                                    Console.WriteLine("Reconnecting to Arduino (COM 7)...");
+                                    try
+                                    {
+                                        arduino.Open();
+                                    }
+                                    catch (Exception)
+                                    {
+                                        System.Threading.Thread.Sleep(1000);
+                                    }
+                                } while (!arduino.IsOpen);
+                                Console.WriteLine("Connected to Arduino!");
+                            }
+                            else
+                            {
+                                Console.WriteLine("Unknown Bluetooth exception. Restart program.");
+                            }
+                        }
                     }
-                } catch (Exception e)
+                }
+                catch (Exception)
                 {
                     Console.WriteLine("Error reading from joystick.");
-                    joystick.Unacquire();
-                    joystick.Acquire();
+                    bool okay = false;
+                    while(!okay)
+                    {
+                        try
+                        {
+                            joystick.Unacquire();
+                            joystick.Acquire();
+                            okay = true;
+                        }
+                        catch (Exception)
+                        {
+
+                        }
+                    }
                 }
             }
         }
