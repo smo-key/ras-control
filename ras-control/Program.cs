@@ -38,21 +38,135 @@ namespace ras_control_test_cs_console
             }
         }
 
-        struct ParseUpdateResult
+        enum JoystickType
         {
-            public PartialJoystickState state;
-            public string update;
-            public bool isJoystick;
-            public bool isJoystickZero;
-            public JoystickButtons btn;
+            NONE = 0,
+            LEFT = 1,
+            RIGHT = 2
+        }
 
-            public ParseUpdateResult(PartialJoystickState state, string update, bool isJoystick, bool isJoystickZero, JoystickButtons btn)
+        enum ControllerUpdateType
+        {
+            BUTTON = 0,
+            JOYSTICK = 1
+        }
+
+        class ControllerUpdate
+        {
+            public ControllerUpdateType updateType { get; protected set; }
+        }
+
+        class JoystickControlUpdate : ControllerUpdate
+        {
+            public JoystickButtons btn { get; private set; }
+            public double x { get; set; }
+            public double y { get; set; }
+
+            public JoystickControlUpdate()
             {
-                this.state = state;
-                this.update = update;
-                this.isJoystick = isJoystick;
-                this.isJoystickZero = isJoystickZero;
+                btn = JoystickButtons.LX;
+                x = 0.0;
+                y = 0.0;
+                updateType = ControllerUpdateType.JOYSTICK;
+            }
+
+            public JoystickControlUpdate(JoystickButtons btn, double x, double y)
+            {
                 this.btn = btn;
+                this.x = x;
+                this.y = y;
+                updateType = ControllerUpdateType.JOYSTICK;
+            }
+
+            public JoystickType getJoystick()
+            {
+                switch (btn)
+                {
+                    case JoystickButtons.LX:
+                    case JoystickButtons.LY:
+                        return JoystickType.LEFT;
+                    case JoystickButtons.RX:
+                    case JoystickButtons.RY:
+                        return JoystickType.RIGHT;
+                    default:
+                        return JoystickType.NONE;
+                }
+            }
+
+            public bool isZero()
+            {
+                return (x == 0) && (y == 0);
+            }
+
+            public string ToShortString()
+            {
+                return btn.ToString().Substring(0, 1) + " " + ((int)(x*100)).ToString() + " " + ((int)(y*100.0)).ToString();
+            }
+
+            public string ToBinnedString()
+            {
+                return btn.ToString().Substring(0, 1) + " " + (getBinX()*BIN_STEP).ToString() + " " + (getBinY()*BIN_STEP).ToString();
+            }
+
+            public override string ToString()
+            {
+                return btn.ToString().Substring(0, 1) + " " + x.ToString("N6") + " " + y.ToString("N6");
+            }
+
+            public string ToLongString()
+            {
+                return btn.ToString().Substring(0, 1) + " " + x.ToString("N6") + " " + y.ToString("N6") + " " + r.ToString("N6") + " " + theta.ToString("N2");
+            }
+
+            public double theta
+            {
+                get
+                {
+                    double r = Math.Sqrt((x * x) + (y * y));
+                    double theta = 90.0 - (Math.Atan2(y, x) / Math.PI * 180.0);
+                    theta = ((theta > 180.0) && (theta <= 270.0)) ? theta - 360.0 : theta;
+                    theta = (r == 0) ? 0 : theta;
+                    return theta;
+                }
+            }
+
+            public double r
+            {
+                get
+                {
+                    double r = Math.Sqrt((x * x) + (y * y));
+                    r = (r > 1) ? 1 : r;
+                    return r;
+                }
+            }
+
+            private static int BINS = 10;
+            private static int BIN_STEP = 100 / BINS;
+            public int getBinX()
+            {
+                return (int)(x * 100.0) / BIN_STEP;
+            }
+            public int getBinY()
+            {
+                return (int)(y * 100.0) / BIN_STEP;
+            }
+        }
+
+        class ButtonUpdate : ControllerUpdate
+        {
+            public JoystickButtons btn { get; private set; }
+            public bool pressed { get; private set; }
+
+            public ButtonUpdate(JoystickButtons btn, bool pressed)
+            {
+                this.btn = btn;
+                this.pressed = pressed;
+                updateType = ControllerUpdateType.BUTTON;
+            }
+
+            public override string ToString()
+            {
+                return btn.ToString() + " " + (pressed ? "1" : "0");
             }
         }
 
@@ -60,26 +174,10 @@ namespace ras_control_test_cs_console
         {
             return Math.Abs(value) < minabs ? 0 : value;
         }
-
-        static string calcJoystick(double x, double y)
-        {
-            //x y r theta
-            string result = x.ToString("N6") + " " + y.ToString("N6");
-            double r = Math.Sqrt((x * x) + (y * y));
-            double theta = 90.0 - (Math.Atan2(y, x) / Math.PI * 180.0);
-            theta = ((theta > 180.0) && (theta <= 270.0)) ? theta - 360.0 : theta;
-            theta = (r == 0) ? 0 : theta;
-            r = (r > 1) ? 1 : r;
-            result += " " + r.ToString("N6") + " " + theta.ToString("N2");
-            return result;
-        }
-
-        static ParseUpdateResult parseUpdate(JoystickUpdate update, PartialJoystickState state)
+        
+        static ControllerUpdate parseUpdate(JoystickUpdate update, JoystickControlUpdate l, JoystickControlUpdate r)
         {
             JoystickButtons btn = (JoystickButtons)update.Offset;
-            string data = btn.ToString();
-            bool isJoystickUpdate = false;
-            bool isJoystickZero = false;
             switch (btn)
             {
                 case JoystickButtons.X:
@@ -94,46 +192,28 @@ namespace ras_control_test_cs_console
                 case JoystickButtons.START:
                 case JoystickButtons.LJ:
                 case JoystickButtons.RJ:
-                    data += " " + (update.Value == 128 ? 1 : 0);
-                    break;
-                case JoystickButtons.POV: //Top, Bottom, Left, Right
-                    double val = update.Value / 100;
-                    val = ((val > 180.0) && (val < 360.0)) ? val - 360.0 : val;
-                    val = (update.Value == -1) ? -1 : val;
-                    data += " " + ((update.Value == 0) || (update.Value == 4500) || (update.Value == 31500) ? 1 : 0) + " "
-                                + ((update.Value == 18000) || (update.Value == 13500) || (update.Value == 22500) ? 1 : 0) + " "
-                                + ((update.Value == 27000) || (update.Value == 22500) || (update.Value == 31500) ? 1 : 0) + " "
-                                + ((update.Value == 9000) || (update.Value == 4500) || (update.Value == 13500) ? 1 : 0) + " " + (val).ToString();
-                    break;
+                    return new ButtonUpdate(btn, update.Value == 128);
+                //case JoystickButtons.POV: //Top, Bottom, Left, Right
+                //    double val = update.Value / 100;
+                //    val = ((val > 180.0) && (val < 360.0)) ? val - 360.0 : val;
+                //    val = (update.Value == -1) ? -1 : val;
+                //    data += " " + ((update.Value == 0) || (update.Value == 4500) || (update.Value == 31500) ? 1 : 0) + " "
+                //                + ((update.Value == 18000) || (update.Value == 13500) || (update.Value == 22500) ? 1 : 0) + " "
+                //                + ((update.Value == 27000) || (update.Value == 22500) || (update.Value == 31500) ? 1 : 0) + " "
+                //                + ((update.Value == 9000) || (update.Value == 4500) || (update.Value == 13500) ? 1 : 0) + " " + (val).ToString();
+                //    break;
                 case JoystickButtons.LX:
-                    state.lx = deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.25);
-                    data = "L " + calcJoystick(state.lx, state.ly);
-                    isJoystickUpdate = true;
-                    isJoystickZero = ((state.lx == 0) && (state.ly == 0));
-                    break;
+                    return new JoystickControlUpdate(btn, deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.25), l.y);
                 case JoystickButtons.LY:
-                    state.ly = deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.25);
-                    data = "L " + calcJoystick(state.lx, state.ly);
-                    isJoystickUpdate = true;
-                    isJoystickZero = ((state.lx == 0) && (state.ly == 0));
-                    break;
+                    return new JoystickControlUpdate(btn, l.x, deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.25));
                 case JoystickButtons.RX:
-                    state.rx = deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.25);
-                    data = "R " + calcJoystick(state.rx, state.ry);
-                    isJoystickUpdate = true;
-                    isJoystickZero = ((state.rx == 0) && (state.ry == 0));
-                    break;
+                    return new JoystickControlUpdate(btn, deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.25), r.y);
                 case JoystickButtons.RY:
-                    state.ry = deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.25);
-                    data = "R " + calcJoystick(state.rx, state.ry);
-                    isJoystickUpdate = true;
-                    isJoystickZero = ((state.rx == 0) && (state.ry == 0));
-                    break;
+                    return new JoystickControlUpdate(btn, r.x, deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.25));
                 default:
-                    data = update.ToString();
-                    break;
+                    return null;
             }
-            return new ParseUpdateResult(state, data, isJoystickUpdate, isJoystickZero, btn);
+
         }
 
         static void Main(string[] args)
@@ -192,18 +272,10 @@ namespace ras_control_test_cs_console
             joystick.Acquire();
 
             // Poll events from joystick
-            PartialJoystickState partialState = new PartialJoystickState();
-            partialState.lx = 0.0;
-            partialState.ly = 0.0;
-            partialState.rx = 0.0;
-            partialState.ry = 0.0;
+            JoystickControlUpdate joyL = new JoystickControlUpdate();
+            JoystickControlUpdate joyR = new JoystickControlUpdate();
 
             /** EVENT LOOP **/
-            const int ROLL_SIZE = 5;
-            const int MAX_TIMEOUT = 50; //ms between first and last push
-            int queueIndex = 0;
-            DateTime queueStartTime = DateTime.Now;
-            PartialJoystickState prevState = new PartialJoystickState();
             while (true)
             {
                 try
@@ -215,68 +287,57 @@ namespace ras_control_test_cs_console
 
                     foreach (JoystickUpdate update in updates)
                     {
-                        ParseUpdateResult result = parseUpdate(update, partialState);
-                        partialState = result.state;
-                        Console.WriteLine(result.update);
-
-                        //Add to queue if joystick update
-                        bool flush = true; //should write to Arduino?
-                        if (result.isJoystick)
+                        ControllerUpdate result = parseUpdate(update, joyL, joyR);
+                        if (result.updateType == ControllerUpdateType.BUTTON)
                         {
-                            if (queueIndex == 0) { queueStartTime = DateTime.Now; }
-                            queueIndex++;
+                            Console.WriteLine(((ButtonUpdate)result).ToString());
 
-                            //Check whether we should flush the state
-                            TimeSpan tdiff = DateTime.Now - queueStartTime;
-                            //Clear immediately if joystick state is zero
-                            if (result.isJoystickZero)
-                            {
-                                queueIndex = 0;
-
-                                //definitely flush
-                                flush = true;
-                            }
-                            else if ((queueIndex == ROLL_SIZE) || (tdiff.TotalMilliseconds > MAX_TIMEOUT))
-                            {
-                                //For now, just get last state when flushing
-
-                                //Clear
-                                queueIndex = 0;
-                                //Flush
-                                flush = true;
-                            }
-                            else
-                            {
-                                flush = false;
-                            }
-                            prevState = result.state;
+                            //We have nothing to do with buttons right now
                         }
+                        else if (result.updateType == ControllerUpdateType.JOYSTICK)
+                        {
+                            //TODO put everything below in here
+                            JoystickControlUpdate joyUpdate = (JoystickControlUpdate)result;
 
-                        try
-                        {
-                            if (flush) arduino.WriteLine(result.update);
-                        }
-                        catch (Exception)
-                        {
-                            if (!arduino.IsOpen)
+                            //Flush if previous bin is not equal to previous bin
+                            bool flush = false;
+                            if (joyUpdate.getJoystick() == JoystickType.LEFT) {
+                                flush = (joyL.getBinX() != joyUpdate.getBinX()) || (joyL.getBinY() != joyUpdate.getBinY());
+                                joyL = joyUpdate;
+                            }
+                            if (joyUpdate.getJoystick() == JoystickType.RIGHT)
                             {
-                                do
+                                flush = (joyR.getBinX() != joyUpdate.getBinX()) || (joyR.getBinY() != joyUpdate.getBinY());
+                                joyR = joyUpdate;
+                            }
+
+                            try
+                            {
+                                Console.WriteLine(joyUpdate.ToBinnedString());
+                                if (flush) arduino.WriteLine(joyUpdate.ToBinnedString());
+                            }
+                            catch (Exception)
+                            {
+                                if (!arduino.IsOpen)
                                 {
-                                    Console.WriteLine("Reconnecting to Arduino (COM 7)...");
-                                    try
+                                    do
                                     {
-                                        arduino.Open();
-                                    }
-                                    catch (Exception)
-                                    {
-                                        System.Threading.Thread.Sleep(1000);
-                                    }
-                                } while (!arduino.IsOpen);
-                                Console.WriteLine("Connected to Arduino!");
-                            }
-                            else
-                            {
-                                Console.WriteLine("Unknown Bluetooth exception. Restart program.");
+                                        Console.WriteLine("Reconnecting to Arduino (COM 7)...");
+                                        try
+                                        {
+                                            arduino.Open();
+                                        }
+                                        catch (Exception)
+                                        {
+                                            System.Threading.Thread.Sleep(1000);
+                                        }
+                                    } while (!arduino.IsOpen);
+                                    Console.WriteLine("Connected to Arduino!");
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Unknown Bluetooth exception. Restart program.");
+                                }
                             }
                         }
                     }

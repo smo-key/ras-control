@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ras-bt-test", "ras-bt-test\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ras-control", "ras-control\ras-control.csproj", "{84CEFB8A-C9FA-4A2E-BF1F-73B8CB1D7558}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{F73A9CBD-7296-4BBD-9202-2CDBDDF30AA8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -96,5 +98,12 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4705E6E3-DD31-46AE-AF6E-F233F63BA472} = {F73A9CBD-7296-4BBD-9202-2CDBDDF30AA8}
+		{08905B42-E5EB-455A-959E-FD612B117EE4} = {F73A9CBD-7296-4BBD-9202-2CDBDDF30AA8}
+		{11486681-C1D0-4F74-B1C9-10247B46F3EE} = {F73A9CBD-7296-4BBD-9202-2CDBDDF30AA8}
+		{382567A5-5666-4CB6-A5C0-BD78B94950EE} = {F73A9CBD-7296-4BBD-9202-2CDBDDF30AA8}
+		{03C39220-F6D7-4306-9777-D8143E2A41E8} = {F73A9CBD-7296-4BBD-9202-2CDBDDF30AA8}
 	EndGlobalSection
 EndGlobal
