@@ -103,9 +103,10 @@ namespace ras_control_test_cs_console
                 return btn.ToString().Substring(0, 1) + " " + ((int)(x*100)).ToString() + " " + ((int)(y*100.0)).ToString();
             }
 
-            public string ToBinnedString()
+            public string ToBinnedString(int direction)
             {
-                return btn.ToString().Substring(0, 1) + " " + (getBinX()*BIN_STEP).ToString() + " " + (getBinY()*BIN_STEP).ToString();
+                
+                return (btn.ToString().Substring(0, 1) == "L" ? (direction == 1 ? "R" : "L") : (direction == 1 ? "L" : "R")) + " " + (getBinX()*BIN_STEP).ToString() + " " + (getBinY()*BIN_STEP).ToString();
             }
 
             public override string ToString()
@@ -175,7 +176,7 @@ namespace ras_control_test_cs_console
             return Math.Abs(value) < minabs ? 0 : value;
         }
         
-        static ControllerUpdate parseUpdate(JoystickUpdate update, JoystickControlUpdate l, JoystickControlUpdate r)
+        static ControllerUpdate parseUpdate(JoystickUpdate update, JoystickControlUpdate l, JoystickControlUpdate r, double direction)
         {
             JoystickButtons btn = (JoystickButtons)update.Offset;
             switch (btn)
@@ -203,13 +204,13 @@ namespace ras_control_test_cs_console
                 //                + ((update.Value == 9000) || (update.Value == 4500) || (update.Value == 13500) ? 1 : 0) + " " + (val).ToString();
                 //    break;
                 case JoystickButtons.LX:
-                    return new JoystickControlUpdate(btn, deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.25), l.y);
+                    return new JoystickControlUpdate(btn, deadband(((update.Value / 65535.0) - 0.5) * -2.0 * direction, 0.25), l.y);
                 case JoystickButtons.LY:
-                    return new JoystickControlUpdate(btn, l.x, deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.25));
+                    return new JoystickControlUpdate(btn, l.x, deadband(((update.Value / 65535.0) - 0.5) * 2.0 * direction, 0.25));
                 case JoystickButtons.RX:
-                    return new JoystickControlUpdate(btn, deadband(((update.Value / 65535.0) - 0.5) * 2.0, 0.25), r.y);
+                    return new JoystickControlUpdate(btn, deadband(((update.Value / 65535.0) - 0.5) * -2.0 * direction, 0.25), r.y);
                 case JoystickButtons.RY:
-                    return new JoystickControlUpdate(btn, r.x, deadband(((update.Value / 65535.0) - 0.5) * -2.0, 0.25));
+                    return new JoystickControlUpdate(btn, r.x, deadband(((update.Value / 65535.0) - 0.5) * 2.0 * direction, 0.25));
                 default:
                     return null;
             }
@@ -275,6 +276,9 @@ namespace ras_control_test_cs_console
             JoystickControlUpdate joyL = new JoystickControlUpdate();
             JoystickControlUpdate joyR = new JoystickControlUpdate();
 
+            int direction = 1; //direction switch
+            bool lastYState = false;
+
             /** EVENT LOOP **/
             while (true)
             {
@@ -287,12 +291,23 @@ namespace ras_control_test_cs_console
 
                     foreach (JoystickUpdate update in updates)
                     {
-                        ControllerUpdate result = parseUpdate(update, joyL, joyR);
+                        ControllerUpdate result = parseUpdate(update, joyL, joyR, direction);
                         if (result.updateType == ControllerUpdateType.BUTTON)
                         {
-                            Console.WriteLine(((ButtonUpdate)result).ToString());
+                            ButtonUpdate btnUpdate = (ButtonUpdate)result;
+
+                            Console.WriteLine(btnUpdate.ToString());
 
                             //We have nothing to do with buttons right now
+
+                            if ((btnUpdate.btn == JoystickButtons.Y) && (btnUpdate.pressed == true) && (lastYState == false))
+                            {
+                                direction = -direction;
+                            }
+                            if (btnUpdate.btn == JoystickButtons.Y)
+                            {
+                                lastYState = btnUpdate.pressed;
+                            }
                         }
                         else if (result.updateType == ControllerUpdateType.JOYSTICK)
                         {
@@ -313,8 +328,8 @@ namespace ras_control_test_cs_console
 
                             try
                             {
-                                Console.WriteLine(joyUpdate.ToBinnedString());
-                                if (flush) arduino.WriteLine(joyUpdate.ToBinnedString());
+                                Console.WriteLine(joyUpdate.ToBinnedString(direction));
+                                if (flush) arduino.WriteLine(joyUpdate.ToBinnedString(direction));
                             }
                             catch (Exception)
                             {
